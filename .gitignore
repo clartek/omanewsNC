@@ -1,0 +1,22 @@
+# Nextcloud credentials & local tokens (CRITICAL)
+auth.json
+auth_state.json
+
+# Local SQLite databases & caches
+news.db
+*.db
+*.sqlite
+*.sqlite3
+.cache/
+.tmp/
+
+# Python artifacts
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# System and editor files
+.DS_Store
+*.swp
+*.log

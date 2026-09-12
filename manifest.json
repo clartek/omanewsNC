@@ -1,0 +1,44 @@
+{
+  "schemaVersion": 1,
+  "id": "clartek.omanextnews",
+  "name": "Omanextnews",
+  "version": "1.0.0",
+  "author": "clartek",
+  "license": "MIT",
+  "description": "Nextcloud News RSS reader for the Omarchy status bar. Direct browser login, sliding reader view, offline reading, live unread counter, and podcast player.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "BarWidget.qml"
+  },
+  "barWidget": {
+    "displayName": "Omanextnews",
+    "description": "Nextcloud News RSS feed reader pill and sliding popout reader panel.",
+    "category": "News",
+    "allowMultiple": false,
+    "defaultSection": "right",
+    "defaults": {
+      "refreshIntervalMin": 15,
+      "notificationsEnabled": true
+    },
+    "schema": [
+      {
+        "key": "refreshIntervalMin",
+        "type": "integer",
+        "label": "Sync interval (minutes)",
+        "min": 1,
+        "max": 120,
+        "step": 5,
+        "defaultValue": 15
+      },
+      {
+        "key": "notificationsEnabled",
+        "type": "boolean",
+        "label": "Article notifications",
+        "defaultValue": true,
+        "description": "Send desktop notification when new articles arrive during sync."
+      }
+    ]
+  }
+}
