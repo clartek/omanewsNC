@@ -75,10 +75,24 @@ function stripHtml(html) {
 
 function sanitizeForQml(rawHtml) {
   var text = String(rawHtml || "")
-  text = text.replace(/<style[^>]*>[\s\S]*?<\/style>/gi, "")
-  text = text.replace(/<script[^>]*>[\s\S]*?<\/script>/gi, "")
-  text = text.replace(/<iframe[^>]*>[\s\S]*?<\/iframe>/gi, "<p><i>[Embedded media]</i></p>")
+  // Remove dangerous tags and embedded elements
+  text = text.replace(/<(script|style|iframe|frame|object|embed|applet|base|link|meta)[^>]*>[\s\S]*?<\/\1>/gi, "")
+  text = text.replace(/<(script|style|iframe|frame|object|embed|applet|base|link|meta)[^>]*\/?>/gi, "")
+  // Disallow <img> in QML RichText to prevent unprompted HTTP/file fetches
+  text = text.replace(/<img[^>]*\/?>/gi, " <i>[Image]</i> ")
+  // Remove event handlers (onclick, onload, onerror, etc.)
+  text = text.replace(/\s+on\w+\s*=\s*(["'][^"']*["']|[^\s>]+)/gi, "")
+  // Neutralize javascript: or file: URIs in links
+  text = text.replace(/href\s*=\s*(["'])\s*(?:javascript|file|data):[\s\S]*?\1/gi, 'href="#"')
   return text
+}
+
+function safeFavicon(url) {
+  var s = String(url || "").trim()
+  if (!s.startsWith("https://")) return ""
+  // Reject local/private network ranges
+  if (/^https:\/\/(localhost|127\.|10\.|192\.168\.|172\.(1[6-9]|2[0-9]|3[0-1])\.|0\.0\.0\.0|\[::1\])/i.test(s)) return ""
+  return s
 }
 
 function filePath(url) {
@@ -93,6 +107,8 @@ if (typeof module !== "undefined") {
     stripHtml: stripHtml,
     decodeEntities: decodeEntities,
     sanitizeForQml: sanitizeForQml,
+    safeFavicon: safeFavicon,
     filePath: filePath
   }
 }
+

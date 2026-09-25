@@ -96,13 +96,17 @@ Panel {
   }
 
   function openInBrowser(url) {
-    if (!url) return
-    Quickshell.execDetached(["omarchy", "launch", "browser", url])
+    if (!url || typeof url !== "string") return
+    var target = url.trim()
+    if (!target.startsWith("http://") && !target.startsWith("https://")) return
+    Quickshell.execDetached(["omarchy", "launch", "browser", "--", target])
   }
 
   function playMedia(url) {
-    if (!url) return
-    Quickshell.execDetached(["mpv", "--no-video", url])
+    if (!url || typeof url !== "string") return
+    var target = url.trim()
+    if (!target.startsWith("http://") && !target.startsWith("https://")) return
+    Quickshell.execDetached(["mpv", "--no-video", "--", target])
   }
 
   Service {
@@ -223,6 +227,7 @@ Panel {
           }
 
           Text {
+            textFormat: Text.PlainText
             text: "OmanewsNC"
             font.family: root.fontFamily
             font.pixelSize: Style.space(13)
@@ -240,6 +245,7 @@ Panel {
             color: Color.accent
 
             Text {
+              textFormat: Text.PlainText
               id: unreadText
               anchors.centerIn: parent
               text: String(ncService.unreadCount) + " unread"
@@ -314,6 +320,7 @@ Panel {
             spacing: Style.space(8)
 
             Text {
+              textFormat: Text.PlainText
               text: ncService.authenticated ? "Account Connection" : "Connect to Nextcloud News"
               font.family: root.fontFamily
               font.pixelSize: Style.space(12)
@@ -322,6 +329,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: ncService.authenticated
               text: "Connected as: " + ncService.username + " (" + ncService.serverUrl + ")\nAuth method: " + ncService.authMethod
               font.family: root.fontFamily
@@ -336,6 +344,7 @@ Panel {
               spacing: Style.space(6)
 
               Text {
+                textFormat: Text.PlainText
                 text: "Server:"
                 font.family: root.fontFamily
                 font.pixelSize: Style.space(10)
@@ -389,6 +398,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: ncService.loggingIn
               text: "A browser tab was opened to grant access. After clicking 'Grant access', this panel will automatically log in."
               font.family: root.fontFamily
@@ -399,6 +409,7 @@ Panel {
             }
 
             Text {
+              textFormat: Text.PlainText
               visible: ncService.loginError !== ""
               text: "Error: " + ncService.loginError
               font.family: root.fontFamily
@@ -465,6 +476,7 @@ Panel {
                       color: root.activeFilter === modelData.id ? Color.accent : Style.hoverFillFor(root.foreground, Color.accent)
 
                       Text {
+                        textFormat: Text.PlainText
                         anchors.centerIn: parent
                         text: modelData.label
                         font.family: root.fontFamily
@@ -503,6 +515,7 @@ Panel {
                       color: root.selectedFolderId === 0 && root.selectedFeedId === 0 ? root.foreground : Style.hoverFillFor(root.foreground, Color.accent)
 
                       Text {
+                        textFormat: Text.PlainText
                         id: allFeedsText
                         anchors.centerIn: parent
                         text: "All Feeds"
@@ -527,6 +540,7 @@ Panel {
                         color: root.selectedFolderId === modelData.id ? root.foreground : Style.hoverFillFor(root.foreground, Color.accent)
 
                         Text {
+                          textFormat: Text.PlainText
                           id: folderLabel
                           anchors.centerIn: parent
                           text: modelData.name
@@ -562,6 +576,7 @@ Panel {
                     anchors.rightMargin: Style.space(8)
 
                     Text {
+                      textFormat: Text.PlainText
                       text: "🔍"
                       font.pixelSize: Style.space(10)
                     }
@@ -574,6 +589,7 @@ Panel {
                       font.pixelSize: Style.space(10)
                       clip: true
                       Text {
+                        textFormat: Text.PlainText
                         anchors.fill: parent
                         visible: !searchInput.text && !searchInput.activeFocus
                         text: "Search articles or author…"
@@ -585,6 +601,7 @@ Panel {
                     }
 
                     Text {
+                      textFormat: Text.PlainText
                       visible: searchInput.text !== ""
                       text: "✕"
                       color: root.dim
@@ -628,12 +645,14 @@ Panel {
                         spacing: Style.space(8)
 
                         Text {
+                          textFormat: Text.PlainText
                           Layout.alignment: Qt.AlignHCenter
                           text: "🎉"
                           font.pixelSize: Style.space(32)
                         }
 
                         Text {
+                          textFormat: Text.PlainText
                           Layout.alignment: Qt.AlignHCenter
                           text: ncService.itemsLoading ? "Loading articles…" : "All Caught Up!"
                           font.family: root.fontFamily
@@ -643,6 +662,7 @@ Panel {
                         }
 
                         Text {
+                          textFormat: Text.PlainText
                           Layout.alignment: Qt.AlignHCenter
                           text: ncService.itemsLoading ? "Fetching latest feeds from Nextcloud" : "No unread articles in this view."
                           font.family: root.fontFamily
@@ -686,7 +706,7 @@ Panel {
                             }
 
                             Image {
-                              source: modelData.feed_favicon || ""
+                              source: Model.safeFavicon(modelData.feed_favicon)
                               Layout.preferredWidth: Style.space(12)
                               Layout.preferredHeight: Style.space(12)
                               fillMode: Image.PreserveAspectFit
@@ -694,6 +714,7 @@ Panel {
                             }
 
                             Text {
+                              textFormat: Text.PlainText
                               text: Model.decodeEntities(modelData.feed_title || "Feed")
                               font.family: root.fontFamily
                               font.pixelSize: Style.space(9)
@@ -704,6 +725,7 @@ Panel {
                             }
 
                             Text {
+                              textFormat: Text.PlainText
                               text: "· " + Model.relativeTime(modelData.pub_date)
                               font.family: root.fontFamily
                               font.pixelSize: Style.space(9)
@@ -714,6 +736,7 @@ Panel {
 
                             // Star Button
                             Text {
+                              textFormat: Text.PlainText
                               text: modelData.starred ? "★" : "☆"
                               font.pixelSize: Style.space(12)
                               color: modelData.starred ? "#f59e0b" : root.dim
@@ -726,6 +749,7 @@ Panel {
 
                             // Read/Unread Bullet
                             Text {
+                              textFormat: Text.PlainText
                               text: modelData.unread ? "●" : "○"
                               font.pixelSize: Style.space(10)
                               color: modelData.unread ? Color.accent : root.dim
@@ -739,6 +763,7 @@ Panel {
 
                           // Article Title
                           Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             text: Model.decodeEntities(modelData.title || "Untitled")
                             font.family: root.fontFamily
@@ -752,6 +777,7 @@ Panel {
 
                           // Snippet
                           Text {
+                            textFormat: Text.PlainText
                             Layout.fillWidth: true
                             visible: modelData.snippet !== ""
                             text: Model.decodeEntities(modelData.snippet || "")
@@ -850,6 +876,7 @@ Panel {
                     spacing: Style.space(4)
 
                     Text {
+                      textFormat: Text.PlainText
                       Layout.fillWidth: true
                       text: root.currentArticle ? root.currentArticle.title : ""
                       font.family: root.fontFamily
@@ -864,6 +891,7 @@ Panel {
                       spacing: Style.space(6)
 
                       Text {
+                        textFormat: Text.PlainText
                         text: root.currentArticle ? (root.currentArticle.feed_title || "Feed") : ""
                         font.bold: true
                         font.pixelSize: Style.space(9.5)
@@ -871,6 +899,7 @@ Panel {
                       }
 
                       Text {
+                        textFormat: Text.PlainText
                         visible: root.currentArticle && !!root.currentArticle.author
                         text: "by " + (root.currentArticle ? root.currentArticle.author : "")
                         font.pixelSize: Style.space(9.5)
@@ -878,6 +907,7 @@ Panel {
                       }
 
                       Text {
+                        textFormat: Text.PlainText
                         text: "· " + (root.currentArticle ? Model.formatFullDate(root.currentArticle.pub_date) : "")
                         font.pixelSize: Style.space(9.5)
                         color: root.dim
@@ -900,6 +930,7 @@ Panel {
                         }
                       }
                       Text {
+                        textFormat: Text.PlainText
                         text: "Audio episode attached"
                         color: root.dim
                         font.pixelSize: Style.space(9)

@@ -17,6 +17,7 @@ import re
 import shlex
 import shutil
 import sqlite3
+import stat
 import subprocess
 import sys
 import time
@@ -61,13 +62,19 @@ def command_output(command, timeout=5):
 
 
 def open_url_in_browser(url):
+  if not url or not isinstance(url, str):
+    return False
+  target = url.strip()
+  parsed = urllib.parse.urlparse(target)
+  if parsed.scheme not in ("http", "https"):
+    return False
   if shutil.which("omarchy"):
-    code, _ = command_output(["omarchy", "launch", "browser", url])
+    code, _ = command_output(["omarchy", "launch", "browser", "--", target])
     if code == 0:
       return True
   if shutil.which("xdg-open"):
     try:
-      subprocess.Popen(["xdg-open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+      subprocess.Popen(["xdg-open", "--", target], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
       return True
     except OSError:
       pass
@@ -111,16 +118,22 @@ def save_direct_auth(saved_creds):
 
 
 def read_direct_auth():
-  if AUTH_FILE.is_file():
+  if not AUTH_FILE.is_file():
+    return None
+  try:
+    fd = os.open(str(AUTH_FILE), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
-      # Enforce private file mode on existing auth file
-      try:
-        current_mode = os.stat(str(AUTH_FILE)).st_mode & 0o777
-        if current_mode != 0o600:
-          os.chmod(str(AUTH_FILE), 0o600)
-      except OSError:
-        pass
-      data = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
+      st = os.fstat(fd)
+      if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
+        return None
+      if (st.st_mode & 0o777) != 0o600:
+        try:
+          os.fchmod(fd, 0o600)
+        except OSError:
+          pass
+      with open(fd, "r", encoding="utf-8") as f:
+        raw = f.read(16 * 1024)
+      data = json.loads(raw)
       if data.get("serverUrl") and data.get("username") and data.get("appPassword"):
         return {
           "serverUrl": data["serverUrl"].rstrip("/"),
@@ -128,8 +141,13 @@ def read_direct_auth():
           "appPassword": data["appPassword"],
           "source": "direct",
         }
-    except Exception:
-      pass
+    finally:
+      try:
+        os.close(fd)
+      except OSError:
+        pass
+  except Exception:
+    pass
   return None
 
 
@@ -542,8 +560,12 @@ def sync_all(client, notify=True):
   if notify and prev_max_id > 0 and new_unread_titles:
     count = len(new_unread_titles)
     title = f"OmanewsNC: {count} new article{'s' if count > 1 else ''}"
-    body = new_unread_titles[0] if count == 1 else f"{new_unread_titles[0]} and {count - 1} more"
-    command_output(["notify-send", "-a", "OmanewsNC", "-i", "news-feed", title, body])
+    first_title = re.sub(r"[<>&]", "", str(new_unread_titles[0] or "")).strip()
+    first_title = "".join(ch for ch in first_title if ord(ch) >= 32 and ord(ch) != 127)
+    if len(first_title) > 100:
+      first_title = first_title[:100] + "…"
+    body = first_title if count == 1 else f"{first_title} and {count - 1} more"
+    command_output(["notify-send", "-a", "OmanewsNC", "-i", "news-feed", "--", title, body])
 
   return True, ""
 

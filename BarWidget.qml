@@ -100,6 +100,7 @@ BarWidget {
 
           Text {
             id: badgeText
+            textFormat: Text.PlainText
             anchors.centerIn: parent
             text: root.unreadCount > 999 ? "999+" : String(root.unreadCount)
             font.family: root.bar ? root.bar.fontFamily : Style.font.family
