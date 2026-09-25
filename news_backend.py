@@ -31,6 +31,18 @@ CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanextnew
 DB_PATH = CACHE_DIR / "news.db"
 AUTH_STATE_PATH = CACHE_DIR / "auth_state.json"
 USER_AGENT = "OmanewsNC/1.0"
+MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MiB limit for API responses
+MAX_ERROR_BYTES = 64 * 1024            # 64 KiB limit for error responses
+MAX_FLOW_BYTES = 64 * 1024             # 64 KiB limit for login flow responses
+
+
+def read_bounded(stream, max_bytes):
+  """Read up to max_bytes from stream, raising ValueError if exceeded."""
+  data = stream.read(max_bytes + 1)
+  if len(data) > max_bytes:
+    raise ValueError(f"HTTP response exceeded maximum allowed limit of {max_bytes} bytes")
+  return data
+
 
 
 def command_output(command, timeout=5):
@@ -66,9 +78,48 @@ def open_url_in_browser(url):
 # Authentication
 # ---------------------------------------------------------------------------
 
+def save_direct_auth(saved_creds):
+  """Persist Nextcloud credentials with strict private permissions (0600)
+
+  using an atomic tempfile write.
+  """
+  PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+  try:
+    os.chmod(PLUGIN_DIR, 0o700)
+  except OSError:
+    pass
+
+  payload = json.dumps(saved_creds, indent=2).encode("utf-8")
+  temp_file = PLUGIN_DIR / f".auth.tmp.{os.getpid()}"
+  flags = os.O_WRONLY | os.O_CREAT | os.O_TRUNC
+  fd = os.open(str(temp_file), flags, 0o600)
+  try:
+    with open(fd, "wb") as f:
+      f.write(payload)
+      f.flush()
+      os.fsync(f.fileno())
+    os.chmod(str(temp_file), 0o600)
+    os.replace(str(temp_file), str(AUTH_FILE))
+    os.chmod(str(AUTH_FILE), 0o600)
+  except Exception:
+    try:
+      if temp_file.exists():
+        temp_file.unlink()
+    except OSError:
+      pass
+    raise
+
+
 def read_direct_auth():
   if AUTH_FILE.is_file():
     try:
+      # Enforce private file mode on existing auth file
+      try:
+        current_mode = os.stat(str(AUTH_FILE)).st_mode & 0o777
+        if current_mode != 0o600:
+          os.chmod(str(AUTH_FILE), 0o600)
+      except OSError:
+        pass
       data = json.loads(AUTH_FILE.read_text(encoding="utf-8"))
       if data.get("serverUrl") and data.get("username") and data.get("appPassword"):
         return {
@@ -177,7 +228,8 @@ def start_login_flow(server_url):
   req = urllib.request.Request(flow_url, data=b"", headers={"User-Agent": USER_AGENT}, method="POST")
   try:
     with urllib.request.urlopen(req, timeout=10) as resp:
-      flow_data = json.loads(resp.read().decode("utf-8"))
+      raw = read_bounded(resp, MAX_FLOW_BYTES)
+      flow_data = json.loads(raw.decode("utf-8"))
       poll_endpoint = flow_data.get("poll", {}).get("endpoint")
       token = flow_data.get("poll", {}).get("token")
       login_url = flow_data.get("login")
@@ -202,8 +254,8 @@ def start_login_flow(server_url):
         try:
           with urllib.request.urlopen(poll_req, timeout=8) as poll_resp:
             if poll_resp.status == 200:
-              creds = json.loads(poll_resp.read().decode("utf-8"))
-              PLUGIN_DIR.mkdir(parents=True, exist_ok=True)
+              raw = read_bounded(poll_resp, MAX_FLOW_BYTES)
+              creds = json.loads(raw.decode("utf-8"))
               saved_creds = {
                 "serverUrl": creds.get("server", server_url).rstrip("/"),
                 "username": creds.get("loginName", ""),
@@ -211,7 +263,7 @@ def start_login_flow(server_url):
                 "createdAt": int(time.time()),
                 "authMethod": "direct"
               }
-              AUTH_FILE.write_text(json.dumps(saved_creds, indent=2), encoding="utf-8")
+              save_direct_auth(saved_creds)
               return True, saved_creds
         except urllib.error.HTTPError as e:
           if e.code == 404:
@@ -255,17 +307,21 @@ class NewsClient:
       req = urllib.request.Request(url, data=data, headers=headers, method=method)
       try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-          body = resp.read().decode("utf-8", errors="replace")
+          raw = read_bounded(resp, MAX_RESPONSE_BYTES)
+          body = raw.decode("utf-8", errors="replace")
           return resp.status, json.loads(body) if body.strip() else {}
       except urllib.error.HTTPError as e:
         if e.code in (401, 403) and len(self.passwords) > 1:
           continue
-        body = e.read().decode("utf-8", errors="replace")
+        raw = e.read(MAX_ERROR_BYTES)
+        body = raw.decode("utf-8", errors="replace") if raw else ""
         try:
-          err_json = json.loads(body)
+          err_json = json.loads(body) if body.strip() else {"message": str(e.reason)}
         except Exception:
           err_json = {"message": str(e.reason)}
         return e.code, err_json
+      except ValueError as e:
+        return 413, {"message": str(e)}
       except Exception as e:
         return 0, {"message": str(e)}
 
@@ -310,7 +366,16 @@ def get_client(args=None):
 
 def get_db():
   CACHE_DIR.mkdir(parents=True, exist_ok=True)
+  try:
+    os.chmod(CACHE_DIR, 0o700)
+  except OSError:
+    pass
   conn = sqlite3.connect(str(DB_PATH))
+  try:
+    if DB_PATH.is_file():
+      os.chmod(DB_PATH, 0o600)
+  except OSError:
+    pass
   conn.row_factory = sqlite3.Row
   with conn:
     conn.execute("""
