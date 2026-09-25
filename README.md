@@ -1,12 +1,12 @@
-# Omanextnews for Omarchy
+# OmanewsNC for Omarchy
 
 <p align="center">
-  <img src="preview.png" alt="Omanextnews Screenshot" width="480" />
+  <img src="preview.png" alt="OmanewsNC Screenshot" width="480" />
 </p>
 
 An Omarchy status bar widget and sliding news reader panel replicating [Nextcloud News for Android](https://github.com/nextcloud/news-android).
 
-**Omanextnews** syncs your RSS and Atom feeds directly from your Nextcloud server, provides a live unread badge in your status bar, caches articles locally in SQLite for instant offline reading, and features a smooth animated sliding reader view with podcast/audio playback.
+**OmanewsNC** syncs your RSS and Atom feeds directly from your Nextcloud server, provides a live unread badge in your status bar, caches articles locally in SQLite for instant offline reading, and features a smooth animated sliding reader view with podcast/audio playback.
 
 ---
 
@@ -34,7 +34,13 @@ An Omarchy status bar widget and sliding news reader panel replicating [Nextclou
 
 ## Installation & Setup
 
-Install or enable the plugin in your Omarchy shell:
+Install and enable the plugin from git:
+
+```bash
+omarchy plugin add https://github.com/clartek/omanextnews.git --enable
+```
+
+Or enable if already installed locally:
 
 ```bash
 omarchy plugin enable clartek.omanextnews --section right
@@ -50,6 +56,15 @@ Reload the shell:
 
 ```bash
 omarchy-shell shell rescanPlugins
+```
+
+## Removal
+
+To disable or remove the plugin:
+
+```bash
+omarchy plugin disable clartek.omanextnews
+omarchy plugin remove clartek.omanextnews
 ```
 
 ---

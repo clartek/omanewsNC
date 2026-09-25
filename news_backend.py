@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Nextcloud News - Omarchy backend helper.
+OmanewsNC - Omarchy backend helper.
 Supports Nextcloud Login Flow v2 (direct browser sign-in) as well as
 Nextcloud Desktop client keyring auto-detection. Handles SQLite caching,
 syncing, and article state management.
@@ -30,7 +30,7 @@ AUTH_FILE = PLUGIN_DIR / "auth.json"
 CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanextnews"
 DB_PATH = CACHE_DIR / "news.db"
 AUTH_STATE_PATH = CACHE_DIR / "auth_state.json"
-USER_AGENT = "Omanextnews/1.0"
+USER_AGENT = "OmanewsNC/1.0"
 
 
 def command_output(command, timeout=5):
@@ -476,9 +476,9 @@ def sync_all(client, notify=True):
 
   if notify and prev_max_id > 0 and new_unread_titles:
     count = len(new_unread_titles)
-    title = f"Nextcloud News: {count} new article{'s' if count > 1 else ''}"
+    title = f"OmanewsNC: {count} new article{'s' if count > 1 else ''}"
     body = new_unread_titles[0] if count == 1 else f"{new_unread_titles[0]} and {count - 1} more"
-    command_output(["notify-send", "-a", "Nextcloud News", "-i", "news-feed", title, body])
+    command_output(["notify-send", "-a", "OmanewsNC", "-i", "news-feed", title, body])
 
   return True, ""
 
@@ -648,7 +648,7 @@ def logout():
 
 
 def main():
-  parser = argparse.ArgumentParser(description="Nextcloud News Omarchy backend")
+  parser = argparse.ArgumentParser(description="OmanewsNC Omarchy backend")
   parser.add_argument("--server-url", default="", help="Nextcloud server URL")
   parser.add_argument("--user", default="", help="Nextcloud user")
   parser.add_argument("--password", default="", help="Nextcloud password")

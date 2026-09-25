@@ -66,11 +66,11 @@ BarWidget {
     slotSize: root.unreadCount > 0 ? Style.space(38) : Style.bar.iconSlot
     tooltipText: root.service
       ? (!root.authenticated
-          ? "Omanextnews: Sign in required"
+          ? "OmanewsNC: Sign in required"
           : (root.unreadCount > 0
-              ? "Omanextnews: " + root.unreadCount + " unread article" + (root.unreadCount > 1 ? "s" : "")
-              : "Omanextnews: All caught up"))
-      : "Omanextnews: Loading…"
+              ? "OmanewsNC: " + root.unreadCount + " unread article" + (root.unreadCount > 1 ? "s" : "")
+              : "OmanewsNC: All caught up"))
+      : "OmanewsNC: Loading…"
 
     iconComponent: Component {
       Item {

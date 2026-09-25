@@ -1,7 +1,7 @@
 {
   "schemaVersion": 1,
   "id": "clartek.omanextnews",
-  "name": "Omanextnews",
+  "name": "OmanewsNC",
   "version": "1.0.0",
   "author": "clartek",
   "license": "MIT",
@@ -13,7 +13,7 @@
     "barWidget": "BarWidget.qml"
   },
   "barWidget": {
-    "displayName": "Omanextnews",
+    "displayName": "OmanewsNC",
     "description": "Nextcloud News RSS feed reader pill and sliding popout reader panel.",
     "category": "News",
     "allowMultiple": false,

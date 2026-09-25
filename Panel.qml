@@ -223,7 +223,7 @@ Panel {
           }
 
           Text {
-            text: "Omanextnews"
+            text: "OmanewsNC"
             font.family: root.fontFamily
             font.pixelSize: Style.space(13)
             font.bold: true
