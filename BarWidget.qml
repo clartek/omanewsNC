@@ -5,7 +5,7 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "clartek.omanextnews"
+  moduleName: "clartek.omanewsnc"
 
   readonly property var service: panelLoader.item ? panelLoader.item.service : null
   readonly property bool syncing: service ? service.syncing : false

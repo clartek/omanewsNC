@@ -9,12 +9,12 @@ import "Model.js" as Model
 
 Panel {
   id: root
-  moduleName: "clartek.omanextnews"
-  ipcTarget: "clartek.omanextnews"
+  moduleName: "clartek.omanewsnc"
+  ipcTarget: "clartek.omanewsnc"
   manageIpc: false
 
   IpcHandler {
-    target: "clartek.omanextnews"
+    target: "clartek.omanewsnc"
     function open(): void { root.open() }
     function close(): void { root.close() }
     function show(): void { root.open() }

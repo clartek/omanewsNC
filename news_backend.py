@@ -26,11 +26,16 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-PLUGIN_DIR = Path.home() / ".config" / "omarchy" / "plugins" / "clartek.omanextnews"
+PLUGIN_DIR = Path.home() / ".config" / "omarchy" / "plugins" / "clartek.omanewsnc"
 AUTH_FILE = PLUGIN_DIR / "auth.json"
-CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanextnews"
+CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanewsnc"
 DB_PATH = CACHE_DIR / "news.db"
 AUTH_STATE_PATH = CACHE_DIR / "auth_state.json"
+
+LEGACY_PLUGIN_DIR = Path.home() / ".config" / "omarchy" / "plugins" / "clartek.omanextnews"
+LEGACY_AUTH_FILE = LEGACY_PLUGIN_DIR / "auth.json"
+LEGACY_CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanextnews"
+LEGACY_DB_PATH = LEGACY_CACHE_DIR / "news.db"
 USER_AGENT = "OmanewsNC/1.0"
 MAX_RESPONSE_BYTES = 10 * 1024 * 1024  # 10 MiB limit for API responses
 MAX_ERROR_BYTES = 64 * 1024            # 64 KiB limit for error responses
@@ -118,10 +123,15 @@ def save_direct_auth(saved_creds):
 
 
 def read_direct_auth():
-  if not AUTH_FILE.is_file():
+  target_file = AUTH_FILE
+  migrating = False
+  if not target_file.is_file() and LEGACY_AUTH_FILE.is_file():
+    target_file = LEGACY_AUTH_FILE
+    migrating = True
+  if not target_file.is_file():
     return None
   try:
-    fd = os.open(str(AUTH_FILE), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
+    fd = os.open(str(target_file), os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC)
     try:
       st = os.fstat(fd)
       if not stat.S_ISREG(st.st_mode) or st.st_uid != os.getuid():
@@ -135,6 +145,11 @@ def read_direct_auth():
         raw = f.read(16 * 1024)
       data = json.loads(raw)
       if data.get("serverUrl") and data.get("username") and data.get("appPassword"):
+        if migrating:
+          try:
+            save_direct_auth(data["serverUrl"], data["username"], data["appPassword"])
+          except Exception:
+            pass
         return {
           "serverUrl": data["serverUrl"].rstrip("/"),
           "credentialUser": data["username"],
@@ -388,6 +403,12 @@ def get_db():
     os.chmod(CACHE_DIR, 0o700)
   except OSError:
     pass
+  if not DB_PATH.is_file() and LEGACY_DB_PATH.is_file():
+    try:
+      shutil.copy2(str(LEGACY_DB_PATH), str(DB_PATH))
+      os.chmod(str(DB_PATH), 0o600)
+    except OSError:
+      pass
   conn = sqlite3.connect(str(DB_PATH))
   try:
     if DB_PATH.is_file():
@@ -721,16 +742,12 @@ def mark_all_read(client, feed_id=0, folder_id=0):
 
 
 def logout():
-  if AUTH_FILE.is_file():
-    try:
-      AUTH_FILE.unlink()
-    except OSError:
-      pass
-  if DB_PATH.is_file():
-    try:
-      DB_PATH.unlink()
-    except OSError:
-      pass
+  for p in (AUTH_FILE, LEGACY_AUTH_FILE, DB_PATH, LEGACY_DB_PATH):
+    if p.is_file():
+      try:
+        p.unlink()
+      except OSError:
+        pass
   return True
 
 
