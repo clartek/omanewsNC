@@ -367,8 +367,25 @@ Panel {
                   font.family: root.fontFamily
                   font.pixelSize: Style.space(10)
                   color: root.foreground
+                  selectByMouse: true
                   clip: true
                   onTextChanged: root.serverInputUrl = text
+                  onAccepted: {
+                    if (root.serverInputUrl.trim() !== "" && !ncService.loggingIn) {
+                      ncService.startLoginFlow(root.serverInputUrl)
+                    }
+                  }
+
+                  Text {
+                    textFormat: Text.PlainText
+                    visible: serverInput.text === "" && !serverInput.activeFocus
+                    text: "https://nextcloud.example.com"
+                    font.family: root.fontFamily
+                    font.pixelSize: Style.space(10)
+                    color: root.dim
+                    anchors.fill: parent
+                    verticalAlignment: Text.AlignVCenter
+                  }
                 }
               }
             }

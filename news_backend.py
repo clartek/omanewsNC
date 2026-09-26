@@ -255,12 +255,38 @@ def keyring_passwords(account):
   return passwords
 
 
+class StrictSameOriginRedirectHandler(urllib.request.HTTPRedirectHandler):
+  """Strict redirect handler: only allows redirects within the exact same origin
+  (scheme and hostname/netloc). Cross-origin, cross-host, and protocol-downgrade
+  redirects are refused (returning None), stopping redirection and preventing
+  Authorization credential leakage.
+  """
+  def __init__(self, allowed_server_url):
+    super().__init__()
+    parsed = urllib.parse.urlparse(allowed_server_url)
+    self.allowed_scheme = parsed.scheme.lower()
+    self.allowed_netloc = parsed.netloc.lower()
+
+  def redirect_request(self, req, fp, code, msg, headers, newurl):
+    resolved_url = urllib.parse.urljoin(req.full_url, newurl)
+    target = urllib.parse.urlparse(resolved_url)
+
+    # Reject cross-host or protocol-downgrade redirects
+    if target.netloc.lower() != self.allowed_netloc:
+      return None
+    if self.allowed_scheme == "https" and target.scheme.lower() != "https":
+      return None
+
+    return super().redirect_request(req, fp, code, msg, headers, resolved_url)
+
+
 def start_login_flow(server_url):
   server_url = server_url.rstrip("/")
   flow_url = f"{server_url}/index.php/login/v2"
+  opener = urllib.request.build_opener(StrictSameOriginRedirectHandler(server_url))
   req = urllib.request.Request(flow_url, data=b"", headers={"User-Agent": USER_AGENT}, method="POST")
   try:
-    with urllib.request.urlopen(req, timeout=10) as resp:
+    with opener.open(req, timeout=10) as resp:
       raw = read_bounded(resp, MAX_FLOW_BYTES)
       flow_data = json.loads(raw.decode("utf-8"))
       poll_endpoint = flow_data.get("poll", {}).get("endpoint")
@@ -285,7 +311,7 @@ def start_login_flow(server_url):
           method="POST"
         )
         try:
-          with urllib.request.urlopen(poll_req, timeout=8) as poll_resp:
+          with opener.open(poll_req, timeout=8) as poll_resp:
             if poll_resp.status == 200:
               raw = read_bounded(poll_resp, MAX_FLOW_BYTES)
               creds = json.loads(raw.decode("utf-8"))
@@ -319,6 +345,7 @@ class NewsClient:
     self.username = username
     self.passwords = passwords  # list of (key, password)
     self.auth_source = auth_source
+    self.opener = urllib.request.build_opener(StrictSameOriginRedirectHandler(self.server_url))
 
   def request(self, endpoint, method="GET", json_body=None, timeout=12):
     url = f"{self.server_url}/index.php/apps/news/api/v1-2{endpoint}"
@@ -339,7 +366,7 @@ class NewsClient:
 
       req = urllib.request.Request(url, data=data, headers=headers, method=method)
       try:
-        with urllib.request.urlopen(req, timeout=timeout) as resp:
+        with self.opener.open(req, timeout=timeout) as resp:
           raw = read_bounded(resp, MAX_RESPONSE_BYTES)
           body = raw.decode("utf-8", errors="replace")
           return resp.status, json.loads(body) if body.strip() else {}
