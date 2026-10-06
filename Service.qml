@@ -25,6 +25,7 @@ Item {
   property var feeds: []
   property var currentItems: []
   property bool itemsLoading: false
+  property double itemsFetchedAt: 0
 
   readonly property string helperPath: Model.filePath(Qt.resolvedUrl("news_backend.py"))
   readonly property int refreshIntervalMs: {
@@ -54,6 +55,7 @@ Item {
     folders = []
     feeds = []
     currentItems = []
+    itemsFetchedAt = 0
     refreshStatus()
   }
 
@@ -253,6 +255,7 @@ Item {
         var parsed = Model.parseJson(itemsOut.text)
         if (parsed.ok && Array.isArray(parsed.items)) {
           root.currentItems = parsed.items
+          root.itemsFetchedAt = Date.now()
         }
       }
     }

@@ -54,7 +54,9 @@ Panel {
   function open() {
     root.controller.show()
     if (ncService.authenticated) {
-      refreshItems()
+      if (!ncService.currentItems || ncService.currentItems.length === 0 || Date.now() - ncService.itemsFetchedAt > 300000) {
+        refreshItems(false)
+      }
     } else {
       ncService.refreshStatus()
     }
@@ -71,7 +73,10 @@ Panel {
     else open()
   }
 
-  function refreshItems() {
+  function refreshItems(force) {
+    if (!force && ncService.itemsFetchedAt > 0 && (Date.now() - ncService.itemsFetchedAt < 300000) && displayedItems.length > 0) {
+      return
+    }
     ncService.loadItems(
       selectedFeedId,
       selectedFolderId,
@@ -92,7 +97,6 @@ Panel {
 
   function closeReader() {
     currentArticle = null
-    refreshItems()
   }
 
   function openInBrowser(url) {
@@ -113,14 +117,23 @@ Panel {
     id: ncService
     settings: root.settings
     onAuthenticatedChanged: {
-      if (authenticated) refreshItems()
+      if (authenticated) refreshItems(true)
     }
   }
 
-  onActiveFilterChanged: { selectedIndex = 0; refreshItems() }
-  onSelectedFolderIdChanged: { selectedIndex = 0; refreshItems() }
-  onSelectedFeedIdChanged: { selectedIndex = 0; refreshItems() }
-  onSearchQueryChanged: { selectedIndex = 0; refreshItems() }
+  Connections {
+    target: ncService
+    function onSyncingChanged() {
+      if (!ncService.syncing && !ncService.syncError && ncService.authenticated) {
+        root.refreshItems(true)
+      }
+    }
+  }
+
+  onActiveFilterChanged: { selectedIndex = 0; refreshItems(true) }
+  onSelectedFolderIdChanged: { selectedIndex = 0; refreshItems(true) }
+  onSelectedFeedIdChanged: { selectedIndex = 0; refreshItems(true) }
+  onSearchQueryChanged: { selectedIndex = 0; refreshItems(true) }
 
   KeyboardPanel {
     id: panel
@@ -632,189 +645,192 @@ Panel {
                   }
                 }
 
-                // Article List Scroll Area
-                Flickable {
-                  id: listFlick
+                // Caught Up Placeholder
+                Rectangle {
+                  visible: root.displayedItems.length === 0
+                  Layout.fillWidth: true
+                  Layout.preferredHeight: Style.space(180)
+                  radius: Style.space(8)
+                  color: Style.hoverFillFor(root.foreground, Color.accent)
+
+                  ColumnLayout {
+                    anchors.centerIn: parent
+                    spacing: Style.space(8)
+
+                    Text {
+                      textFormat: Text.PlainText
+                      Layout.alignment: Qt.AlignHCenter
+                      text: "🎉"
+                      font.pixelSize: Style.space(32)
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      Layout.alignment: Qt.AlignHCenter
+                      text: ncService.itemsLoading ? "Loading articles…" : "All Caught Up!"
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.space(14)
+                      font.bold: true
+                      color: root.foreground
+                    }
+
+                    Text {
+                      textFormat: Text.PlainText
+                      Layout.alignment: Qt.AlignHCenter
+                      text: ncService.itemsLoading ? "Fetching latest feeds from Nextcloud" : "No unread articles in this view."
+                      font.family: root.fontFamily
+                      font.pixelSize: Style.space(10)
+                      color: root.dim
+                    }
+                  }
+                }
+
+                // Virtualized Article List
+                ListView {
+                  id: articleList
+                  visible: root.displayedItems.length > 0
                   Layout.fillWidth: true
                   Layout.fillHeight: true
-                  contentWidth: width
-                  contentHeight: articlesCol.implicitHeight
-                  boundsBehavior: Flickable.StopAtBounds
-                  flickableDirection: Flickable.VerticalFlick
                   clip: true
+                  boundsBehavior: Flickable.StopAtBounds
+                  spacing: Style.space(6)
+                  model: root.displayedItems
+                  currentIndex: root.selectedIndex
+
+                  onSelectedIndexChanged: {
+                    if (currentIndex !== root.selectedIndex) {
+                      currentIndex = root.selectedIndex
+                      positionViewAtIndex(root.selectedIndex, ListView.Contain)
+                    }
+                  }
+
                   ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
 
-                  Column {
-                    id: articlesCol
-                    width: listFlick.width - Style.space(10)
-                    spacing: Style.space(6)
+                  delegate: Rectangle {
+                    id: card
+                    required property var modelData
+                    required property int index
 
-                    // Caught Up Placeholder
-                    Rectangle {
-                      visible: root.displayedItems.length === 0
-                      width: parent.width
-                      height: Style.space(180)
-                      radius: Style.space(8)
-                      color: Style.hoverFillFor(root.foreground, Color.accent)
+                    width: articleList.width - Style.space(10)
+                    implicitHeight: cardCol.implicitHeight + Style.space(16)
+                    radius: Style.space(8)
+                    property bool isSelected: index === root.selectedIndex
+                    color: isSelected ? Style.selectedFillFor(root.foreground, Color.accent) : Style.hoverFillFor(root.foreground, Color.accent)
+                    border.color: isSelected ? Color.accent : "transparent"
+                    border.width: isSelected ? 1.5 : 0
 
-                      ColumnLayout {
-                        anchors.centerIn: parent
-                        spacing: Style.space(8)
+                    ColumnLayout {
+                      id: cardCol
+                      anchors.fill: parent
+                      anchors.margins: Style.space(10)
+                      spacing: Style.space(4)
 
-                        Text {
-                          textFormat: Text.PlainText
-                          Layout.alignment: Qt.AlignHCenter
-                          text: "🎉"
-                          font.pixelSize: Style.space(32)
+                      // Feed name, Relative Date, Actions
+                      RowLayout {
+                        Layout.fillWidth: true
+                        spacing: Style.space(6)
+
+                        Rectangle {
+                          visible: modelData.unread === 1
+                          width: Style.space(6)
+                          height: width
+                          radius: width / 2
+                          color: Color.accent
+                        }
+
+                        Image {
+                          source: Model.safeFavicon(modelData.feed_favicon)
+                          Layout.preferredWidth: Style.space(12)
+                          Layout.preferredHeight: Style.space(12)
+                          fillMode: Image.PreserveAspectFit
+                          asynchronous: true
+                          cache: true
+                          visible: status === Image.Ready
                         }
 
                         Text {
                           textFormat: Text.PlainText
-                          Layout.alignment: Qt.AlignHCenter
-                          text: ncService.itemsLoading ? "Loading articles…" : "All Caught Up!"
+                          text: Model.decodeEntities(modelData.feed_title || "Feed")
                           font.family: root.fontFamily
-                          font.pixelSize: Style.space(14)
+                          font.pixelSize: Style.space(9)
                           font.bold: true
-                          color: root.foreground
+                          color: Color.accent
+                          elide: Text.ElideRight
+                          Layout.maximumWidth: Style.space(180)
                         }
 
                         Text {
                           textFormat: Text.PlainText
-                          Layout.alignment: Qt.AlignHCenter
-                          text: ncService.itemsLoading ? "Fetching latest feeds from Nextcloud" : "No unread articles in this view."
+                          text: "· " + Model.relativeTime(modelData.pub_date)
                           font.family: root.fontFamily
-                          font.pixelSize: Style.space(10)
+                          font.pixelSize: Style.space(9)
                           color: root.dim
                         }
+
+                        Item { Layout.fillWidth: true }
+
+                        // Star Button
+                        Text {
+                          textFormat: Text.PlainText
+                          text: modelData.starred ? "★" : "☆"
+                          font.pixelSize: Style.space(12)
+                          color: modelData.starred ? "#f59e0b" : root.dim
+                          MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: ncService.toggleStar(modelData.id, modelData.starred)
+                          }
+                        }
+
+                        // Read/Unread Bullet
+                        Text {
+                          textFormat: Text.PlainText
+                          text: modelData.unread ? "●" : "○"
+                          font.pixelSize: Style.space(10)
+                          color: modelData.unread ? Color.accent : root.dim
+                          MouseArea {
+                            anchors.fill: parent
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: ncService.markRead(modelData.id, !modelData.unread)
+                          }
+                        }
+                      }
+
+                      // Article Title
+                      Text {
+                        textFormat: Text.PlainText
+                        Layout.fillWidth: true
+                        text: Model.decodeEntities(modelData.title || "Untitled")
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.space(12)
+                        font.bold: modelData.unread === 1
+                        color: modelData.unread === 1 ? root.foreground : root.dim
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
+                      }
+
+                      // Snippet
+                      Text {
+                        textFormat: Text.PlainText
+                        Layout.fillWidth: true
+                        visible: modelData.snippet !== ""
+                        text: Model.decodeEntities(modelData.snippet || "")
+                        font.family: root.fontFamily
+                        font.pixelSize: Style.space(9.5)
+                        color: root.dim
+                        wrapMode: Text.Wrap
+                        maximumLineCount: 2
+                        elide: Text.ElideRight
                       }
                     }
 
-                    // Article Cards
-                    Repeater {
-                      model: root.displayedItems
-
-                      Rectangle {
-                        id: card
-                        width: articlesCol.width
-                        height: cardCol.implicitHeight + Style.space(16)
-                        radius: Style.space(8)
-                        property bool isSelected: index === root.selectedIndex
-                        color: isSelected ? Style.selectedFillFor(root.foreground, Color.accent) : Style.hoverFillFor(root.foreground, Color.accent)
-                        border.color: isSelected ? Color.accent : "transparent"
-                        border.width: isSelected ? 1.5 : 0
-
-                        ColumnLayout {
-                          id: cardCol
-                          anchors.fill: parent
-                          anchors.margins: Style.space(10)
-                          spacing: Style.space(4)
-
-                          // Feed name, Relative Date, Actions
-                          RowLayout {
-                            Layout.fillWidth: true
-                            spacing: Style.space(6)
-
-                            Rectangle {
-                              visible: modelData.unread === 1
-                              width: Style.space(6)
-                              height: width
-                              radius: width / 2
-                              color: Color.accent
-                            }
-
-                            Image {
-                              source: Model.safeFavicon(modelData.feed_favicon)
-                              Layout.preferredWidth: Style.space(12)
-                              Layout.preferredHeight: Style.space(12)
-                              fillMode: Image.PreserveAspectFit
-                              visible: status === Image.Ready
-                            }
-
-                            Text {
-                              textFormat: Text.PlainText
-                              text: Model.decodeEntities(modelData.feed_title || "Feed")
-                              font.family: root.fontFamily
-                              font.pixelSize: Style.space(9)
-                              font.bold: true
-                              color: Color.accent
-                              elide: Text.ElideRight
-                              Layout.maximumWidth: Style.space(180)
-                            }
-
-                            Text {
-                              textFormat: Text.PlainText
-                              text: "· " + Model.relativeTime(modelData.pub_date)
-                              font.family: root.fontFamily
-                              font.pixelSize: Style.space(9)
-                              color: root.dim
-                            }
-
-                            Item { Layout.fillWidth: true }
-
-                            // Star Button
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.starred ? "★" : "☆"
-                              font.pixelSize: Style.space(12)
-                              color: modelData.starred ? "#f59e0b" : root.dim
-                              MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: ncService.toggleStar(modelData.id, modelData.starred)
-                              }
-                            }
-
-                            // Read/Unread Bullet
-                            Text {
-                              textFormat: Text.PlainText
-                              text: modelData.unread ? "●" : "○"
-                              font.pixelSize: Style.space(10)
-                              color: modelData.unread ? Color.accent : root.dim
-                              MouseArea {
-                                anchors.fill: parent
-                                cursorShape: Qt.PointingHandCursor
-                                onClicked: ncService.markRead(modelData.id, !modelData.unread)
-                              }
-                            }
-                          }
-
-                          // Article Title
-                          Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            text: Model.decodeEntities(modelData.title || "Untitled")
-                            font.family: root.fontFamily
-                            font.pixelSize: Style.space(12)
-                            font.bold: modelData.unread === 1
-                            color: modelData.unread === 1 ? root.foreground : root.dim
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                          }
-
-                          // Snippet
-                          Text {
-                            textFormat: Text.PlainText
-                            Layout.fillWidth: true
-                            visible: modelData.snippet !== ""
-                            text: Model.decodeEntities(modelData.snippet || "")
-                            font.family: root.fontFamily
-                            font.pixelSize: Style.space(9.5)
-                            color: root.dim
-                            wrapMode: Text.Wrap
-                            maximumLineCount: 2
-                            elide: Text.ElideRight
-                          }
-                        }
-
-                        MouseArea {
-                          anchors.fill: parent
-                          cursorShape: Qt.PointingHandCursor
-                          onClicked: {
-                            root.selectedIndex = index
-                            root.openArticle(modelData)
-                          }
-                        }
+                    MouseArea {
+                      anchors.fill: parent
+                      cursorShape: Qt.PointingHandCursor
+                      onClicked: {
+                        root.selectedIndex = index
+                        root.openArticle(modelData)
                       }
                     }
                   }
