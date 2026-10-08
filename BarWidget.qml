@@ -57,6 +57,11 @@ BarWidget {
       root.injectPanel()
       Qt.callLater(root.injectPanel)
     }
+    onStatusChanged: {
+      if (status === Loader.Error) {
+        console.error("OmanewsNC: Failed to load Panel.qml:", sourceComponent ? sourceComponent.errorString() : "unknown error")
+      }
+    }
   }
 
   BarIconButton {

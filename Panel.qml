@@ -697,10 +697,15 @@ Panel {
                   model: root.displayedItems
                   currentIndex: root.selectedIndex
 
-                  onSelectedIndexChanged: {
-                    if (currentIndex !== root.selectedIndex) {
-                      currentIndex = root.selectedIndex
-                      positionViewAtIndex(root.selectedIndex, ListView.Contain)
+                  Connections {
+                    target: root
+                    function onSelectedIndexChanged() {
+                      if (articleList.currentIndex !== root.selectedIndex) {
+                        articleList.currentIndex = root.selectedIndex
+                      }
+                      if (root.selectedIndex >= 0 && root.selectedIndex < articleList.count) {
+                        articleList.positionViewAtIndex(root.selectedIndex, ListView.Contain)
+                      }
                     }
                   }
 
