@@ -64,11 +64,13 @@ BarWidget {
     }
   }
 
-  BarIconButton {
+  WidgetButton {
     id: button
     anchors.fill: parent
     bar: root.bar
-    slotSize: root.unreadCount > 0 ? Style.space(38) : Style.bar.iconSlot
+    hasVisualContent: true
+    labelVisible: false
+    fixedWidth: Style.bar.iconSlot
     tooltipText: root.service
       ? (!root.authenticated
           ? "OmanewsNC: Sign in required"
@@ -77,43 +79,32 @@ BarWidget {
               : "OmanewsNC: All caught up"))
       : "OmanewsNC: Loading…"
 
-    iconComponent: Component {
-      Item {
+    Item {
+      anchors.centerIn: parent
+      width: Style.bar.iconFont
+      height: Style.bar.iconFont
+
+      NextcloudNewsIcon {
         anchors.fill: parent
+        iconSize: Style.bar.iconFont
+        color: root.iconColor
+        syncing: root.syncing
+        error: root.syncError
+      }
 
-        NextcloudNewsIcon {
-          anchors.left: root.unreadCount > 0 ? parent.left : undefined
-          anchors.centerIn: root.unreadCount > 0 ? undefined : parent
-          anchors.verticalCenter: parent.verticalCenter
-          anchors.leftMargin: root.unreadCount > 0 ? Style.space(2) : 0
-          iconSize: Style.space(14)
-          color: root.iconColor
-          syncing: root.syncing
-          error: root.syncError
-        }
-
-        Rectangle {
-          id: badge
-          visible: root.authenticated && root.unreadCount > 0
-          anchors.right: parent.right
-          anchors.rightMargin: Style.space(1)
-          anchors.verticalCenter: parent.verticalCenter
-          width: Math.max(Style.space(16), badgeText.implicitWidth + Style.space(6))
-          height: Style.space(14)
-          radius: height / 2
-          color: Color.accent
-
-          Text {
-            id: badgeText
-            textFormat: Text.PlainText
-            anchors.centerIn: parent
-            text: root.unreadCount > 999 ? "999+" : String(root.unreadCount)
-            font.family: root.bar ? root.bar.fontFamily : Style.font.family
-            font.pixelSize: Style.space(9)
-            font.bold: true
-            color: Color.background
-          }
-        }
+      Rectangle {
+        id: unreadDot
+        visible: root.authenticated && root.unreadCount > 0
+        width: Style.space(4.5)
+        height: width
+        radius: width / 2
+        anchors.top: parent.top
+        anchors.right: parent.right
+        anchors.topMargin: -Style.space(1)
+        anchors.rightMargin: -Style.space(1)
+        color: root.syncError ? (root.bar ? root.bar.urgent : Color.urgent) : Color.accent
+        border.width: 1
+        border.color: root.bar ? root.bar.background : Color.background
       }
     }
 

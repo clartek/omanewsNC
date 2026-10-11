@@ -1,5 +1,4 @@
 import QtQuick
-import QtQuick.Shapes
 import qs.Commons
 
 Item {
@@ -14,69 +13,44 @@ Item {
   implicitWidth: width
   implicitHeight: height
 
-  readonly property real scaleFactor: iconSize / 100
-  readonly property real strokeW: 10 * scaleFactor
+  readonly property real barHeight: Math.max(1.5, root.iconSize * 0.14)
+  readonly property real barSpacing: Math.max(1.5, root.iconSize * 0.14)
+  readonly property color fillColor: root.error ? Color.urgent : root.color
 
-  Shape {
-    id: shape
-    anchors.fill: parent
-    antialiasing: true
-    preferredRendererType: Shape.CurveRenderer
-    layer.enabled: true
-    layer.samples: 4
+  Column {
+    anchors.centerIn: parent
+    spacing: root.barSpacing
 
-    // Dot at bottom-left
-    ShapePath {
-      strokeColor: "transparent"
-      fillColor: root.error ? Color.urgent : root.color
-      startX: 20 * root.scaleFactor
-      startY: 80 * root.scaleFactor
-      PathArc {
-        x: 36 * root.scaleFactor
-        y: 80 * root.scaleFactor
-        radiusX: 8 * root.scaleFactor
-        radiusY: 8 * root.scaleFactor
-        useLargeArc: true
-      }
-      PathArc {
-        x: 20 * root.scaleFactor
-        y: 80 * root.scaleFactor
-        radiusX: 8 * root.scaleFactor
-        radiusY: 8 * root.scaleFactor
-        useLargeArc: true
-      }
+    Rectangle {
+      width: Math.max(2, Math.round(root.iconSize * 0.95))
+      height: root.barHeight
+      radius: height / 2
+      color: root.fillColor
+      antialiasing: true
     }
 
-    // Inner Arc
-    ShapePath {
-      strokeColor: root.error ? Color.urgent : root.color
-      strokeWidth: root.strokeW
-      fillColor: "transparent"
-      capStyle: ShapePath.RoundCap
-      startX: 20 * root.scaleFactor
-      startY: 48 * root.scaleFactor
-      PathArc {
-        x: 52 * root.scaleFactor
-        y: 80 * root.scaleFactor
-        radiusX: 32 * root.scaleFactor
-        radiusY: 32 * root.scaleFactor
-      }
+    Rectangle {
+      width: Math.max(2, Math.round(root.iconSize * 0.67))
+      height: root.barHeight
+      radius: height / 2
+      color: root.fillColor
+      antialiasing: true
     }
 
-    // Outer Arc
-    ShapePath {
-      strokeColor: root.error ? Color.urgent : root.color
-      strokeWidth: root.strokeW
-      fillColor: "transparent"
-      capStyle: ShapePath.RoundCap
-      startX: 20 * root.scaleFactor
-      startY: 22 * root.scaleFactor
-      PathArc {
-        x: 78 * root.scaleFactor
-        y: 80 * root.scaleFactor
-        radiusX: 58 * root.scaleFactor
-        radiusY: 58 * root.scaleFactor
-      }
+    Rectangle {
+      width: Math.max(2, Math.round(root.iconSize * 0.88))
+      height: root.barHeight
+      radius: height / 2
+      color: root.fillColor
+      antialiasing: true
+    }
+
+    Rectangle {
+      width: Math.max(2, Math.round(root.iconSize * 0.46))
+      height: root.barHeight
+      radius: height / 2
+      color: root.fillColor
+      antialiasing: true
     }
   }
 

@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "clartek.omanewsnc",
   "name": "OmanewsNC",
-  "version": "1.0.2",
+  "version": "1.0.3",
   "author": "clartek",
   "license": "MIT",
   "description": "Nextcloud News RSS reader for the Omarchy status bar. Direct browser login, sliding reader view, offline reading, live unread counter, and podcast player.",

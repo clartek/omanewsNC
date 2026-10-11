@@ -10,7 +10,9 @@ import argparse
 import base64
 import configparser
 import datetime
+import hashlib
 import html
+import ipaddress
 import json
 import os
 import re
@@ -30,6 +32,7 @@ PLUGIN_DIR = Path.home() / ".config" / "omarchy" / "plugins" / "clartek.omanewsn
 AUTH_FILE = PLUGIN_DIR / "auth.json"
 CACHE_DIR = Path.home() / ".cache" / "omarchy" / "plugins" / "clartek.omanewsnc"
 DB_PATH = CACHE_DIR / "news.db"
+FAVICON_CACHE_DIR = CACHE_DIR / "favicons"
 AUTH_STATE_PATH = CACHE_DIR / "auth_state.json"
 
 LEGACY_PLUGIN_DIR = Path.home() / ".config" / "omarchy" / "plugins" / "clartek.omanextnews"
@@ -84,6 +87,142 @@ def open_url_in_browser(url):
     except OSError:
       pass
   return False
+
+
+def find_app_icon():
+  candidates = [
+    PLUGIN_DIR / "icon.svg",
+    PLUGIN_DIR / "icon.png",
+    Path(__file__).resolve().parent / "icon.svg",
+    Path(__file__).resolve().parent / "icon.png",
+  ]
+  for c in candidates:
+    if c.is_file() and c.stat().st_size > 0:
+      return str(c)
+  return None
+
+
+def is_safe_favicon_url(url, server_url=None):
+  if not url or not isinstance(url, str):
+    return False
+  url = url.strip()
+  parsed = urllib.parse.urlparse(url)
+  if parsed.scheme.lower() not in ("http", "https"):
+    return False
+  hostname = parsed.hostname
+  if not hostname:
+    return False
+
+  if server_url:
+    server_parsed = urllib.parse.urlparse(server_url)
+    if parsed.netloc.lower() == server_parsed.netloc.lower():
+      return True
+
+  lower_host = hostname.lower()
+  if lower_host in ("localhost", "0.0.0.0", "broadcast"):
+    return False
+  if lower_host.endswith(".local") or lower_host.endswith(".internal") or lower_host.endswith(".localhost"):
+    return False
+
+  try:
+    ip = ipaddress.ip_address(hostname)
+    if ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_reserved or ip.is_multicast:
+      return False
+  except ValueError:
+    pass
+
+  return True
+
+
+def get_or_fetch_favicon(favicon_url, client=None):
+  if not favicon_url or not isinstance(favicon_url, str):
+    return None
+
+  favicon_url = favicon_url.strip()
+  if favicon_url.startswith("//"):
+    favicon_url = "https:" + favicon_url
+  elif favicon_url.startswith("/") and client and hasattr(client, "server_url"):
+    favicon_url = urllib.parse.urljoin(client.server_url, favicon_url)
+
+  server_url = getattr(client, "server_url", None) if client else None
+  if not is_safe_favicon_url(favicon_url, server_url):
+    return None
+
+  FAVICON_CACHE_DIR.mkdir(parents=True, exist_ok=True)
+  try:
+    os.chmod(FAVICON_CACHE_DIR, 0o700)
+  except OSError:
+    pass
+
+  url_hash = hashlib.sha256(favicon_url.encode("utf-8")).hexdigest()[:16]
+  for existing in FAVICON_CACHE_DIR.glob(f"{url_hash}.*"):
+    if existing.is_file() and existing.stat().st_size > 0:
+      return str(existing)
+
+  parsed_path = urllib.parse.urlparse(favicon_url).path.lower()
+  ext = ""
+  for candidate in (".png", ".svg", ".ico", ".jpg", ".jpeg", ".webp", ".gif"):
+    if parsed_path.endswith(candidate):
+      ext = candidate
+      break
+
+  headers = {
+    "User-Agent": USER_AGENT,
+    "Accept": "image/*,*/*;q=0.8",
+  }
+
+  opener = urllib.request.build_opener()
+  if client and server_url:
+    server_parsed = urllib.parse.urlparse(server_url)
+    target_parsed = urllib.parse.urlparse(favicon_url)
+    if target_parsed.netloc.lower() == server_parsed.netloc.lower() and hasattr(client, "passwords") and client.passwords:
+      for key, password in client.passwords:
+        auth_str = f"{client.username}:{password}"
+        headers["Authorization"] = "Basic " + base64.b64encode(auth_str.encode("utf-8")).decode("ascii")
+        break
+      opener = client.opener
+
+  req = urllib.request.Request(favicon_url, headers=headers)
+  tmp_file = None
+  try:
+    with opener.open(req, timeout=5) as resp:
+      if resp.status != 200:
+        return None
+      content_type = resp.headers.get("Content-Type", "").lower()
+      if not ext:
+        if "svg" in content_type:
+          ext = ".svg"
+        elif "png" in content_type:
+          ext = ".png"
+        elif "icon" in content_type or "ico" in content_type:
+          ext = ".ico"
+        elif "jpeg" in content_type or "jpg" in content_type:
+          ext = ".jpg"
+        elif "webp" in content_type:
+          ext = ".webp"
+        else:
+          ext = ".png"
+
+      data = read_bounded(resp, 1024 * 1024)
+      if not data:
+        return None
+
+      dest_file = FAVICON_CACHE_DIR / f"{url_hash}{ext}"
+      tmp_file = FAVICON_CACHE_DIR / f".tmp_{url_hash}_{os.getpid()}{ext}"
+      with open(tmp_file, "wb") as f:
+        f.write(data)
+        f.flush()
+        os.fsync(f.fileno())
+      os.chmod(tmp_file, 0o600)
+      os.replace(tmp_file, dest_file)
+      return str(dest_file)
+  except Exception:
+    if tmp_file and tmp_file.exists():
+      try:
+        tmp_file.unlink()
+      except OSError:
+        pass
+    return None
 
 
 # ---------------------------------------------------------------------------
@@ -530,7 +669,7 @@ def sync_all(client, notify=True):
       except ValueError:
         prev_max_id = 0
 
-  new_unread_titles = []
+  new_unread_items = []
   max_id = prev_max_id
 
   with conn:
@@ -565,7 +704,7 @@ def sync_all(client, notify=True):
       if item_id > max_id:
         max_id = item_id
       if prev_max_id > 0 and item_id > prev_max_id and item.get("unread", True):
-        new_unread_titles.append(item.get("title", ""))
+        new_unread_items.append(item)
 
       conn.execute(
         """INSERT INTO items
@@ -605,15 +744,59 @@ def sync_all(client, notify=True):
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('last_sync', ?)", (str(int(time.time())),))
     conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('starred_count', ?)", (str(starred_count),))
 
-  if notify and prev_max_id > 0 and new_unread_titles:
-    count = len(new_unread_titles)
-    title = f"OmanewsNC: {count} new article{'s' if count > 1 else ''}"
-    first_title = re.sub(r"[<>&]", "", str(new_unread_titles[0] or "")).strip()
+  if notify and prev_max_id > 0 and new_unread_items:
+    new_unread_items.sort(key=lambda it: (it.get("id") or 0, it.get("pubDate") or 0), reverse=True)
+    count = len(new_unread_items)
+    latest_item = new_unread_items[0]
+    feed_id = latest_item.get("feedId")
+
+    feed_map = {f.get("id"): f for f in feeds if f.get("id") is not None}
+    feed = feed_map.get(feed_id)
+    if not feed and feed_id is not None:
+      with conn:
+        feed_row = conn.execute("SELECT * FROM feeds WHERE id = ?", (feed_id,)).fetchone()
+        if feed_row:
+          feed = dict(feed_row)
+
+    first_title = re.sub(r"[<>&]", "", str(latest_item.get("title", "") or "")).strip()
     first_title = "".join(ch for ch in first_title if ord(ch) >= 32 and ord(ch) != 127)
     if len(first_title) > 100:
       first_title = first_title[:100] + "…"
-    body = first_title if count == 1 else f"{first_title} and {count - 1} more"
-    command_output(["notify-send", "-a", "OmanewsNC", "-i", "news-feed", "--", title, body])
+
+    feed_title = feed.get("title") if feed else None
+    clean_feed_title = re.sub(r"[<>&]", "", str(feed_title or "")).strip() if feed_title else ""
+    clean_feed_title = "".join(ch for ch in clean_feed_title if ord(ch) >= 32 and ord(ch) != 127)
+    if len(clean_feed_title) > 60:
+      clean_feed_title = clean_feed_title[:60] + "…"
+
+    unique_feeds = {it.get("feedId") for it in new_unread_items if it.get("feedId") is not None}
+    all_same_feed = len(unique_feeds) == 1
+
+    if count == 1:
+      title = clean_feed_title if clean_feed_title else "OmanewsNC: 1 new article"
+      body = first_title or "New unread article"
+    elif all_same_feed and clean_feed_title:
+      title = f"{clean_feed_title}: {count} new articles"
+      body = f"{first_title} and {count - 1} more" if count > 1 else first_title
+    else:
+      title = f"OmanewsNC: {count} new articles"
+      body = f"{first_title} and {count - 1} more"
+
+    favicon_url = (feed.get("faviconLink") or feed.get("favicon_link")) if feed else None
+    icon_path = get_or_fetch_favicon(favicon_url, client=client)
+    if not icon_path and feed and feed.get("link"):
+      icon_path = get_or_fetch_favicon(urllib.parse.urljoin(feed.get("link"), "/favicon.ico"), client=client)
+
+    cmd = ["notify-send", "-a", "OmanewsNC"]
+    if icon_path and os.path.isfile(icon_path):
+      cmd.extend(["-i", icon_path])
+    else:
+      fallback_icon = find_app_icon()
+      if fallback_icon and os.path.isfile(fallback_icon):
+        cmd.extend(["-i", fallback_icon])
+
+    cmd.extend(["--", title, body])
+    command_output(cmd)
 
   return True, ""
 
@@ -775,6 +958,11 @@ def logout():
         p.unlink()
       except OSError:
         pass
+  if FAVICON_CACHE_DIR.is_dir():
+    try:
+      shutil.rmtree(str(FAVICON_CACHE_DIR), ignore_errors=True)
+    except OSError:
+      pass
   return True
 
 
