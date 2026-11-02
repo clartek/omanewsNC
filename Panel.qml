@@ -51,6 +51,38 @@ Panel {
   readonly property string fontFamily: bar ? bar.fontFamily : Style.font.family
   readonly property var displayedItems: ncService.currentItems || []
 
+  // Capture the scope before showing the confirmation, even if selection changes.
+  property int pendingReadFeedId: 0
+  property int pendingReadFolderId: 0
+  property string pendingReadMessage: ""
+
+  function requestMarkAllRead() {
+    if (!root.opened || !ncService.authenticated || ncService.unreadCount <= 0 || root.currentArticle || root.showSettings || readAllConfirm.opened) return
+    pendingReadFeedId = selectedFeedId
+    pendingReadFolderId = selectedFolderId
+    pendingReadMessage = pendingReadFeedId > 0
+      ? "Mark all articles in this feed as read?"
+      : pendingReadFolderId > 0
+        ? "Mark all articles in this folder as read?"
+        : "Mark all articles across all feeds as read?"
+    pendingReadMessage += "\n\nThis includes articles hidden by filters or search."
+    readAllConfirm.selectedIndex = 0
+    readAllConfirm.opened = true
+    readAllConfirm.forceActiveFocus()
+  }
+
+  function dismissReadAllConfirm() {
+    readAllConfirm.opened = false
+    keyCatcher.forceActiveFocus()
+  }
+
+  onOpenedChanged: {
+    if (!opened) {
+      actionsMenu.close()
+      readAllConfirm.opened = false
+    }
+  }
+
   function open() {
     root.controller.show()
     if (ncService.authenticated) {
@@ -150,6 +182,7 @@ Panel {
       id: keyCatcher
       anchors.fill: parent
       clip: true
+      blocked: readAllConfirm.opened || actionsMenu.opened
 
       onMoveRequested: function(dx, dy) {
         if (root.currentArticle) {
@@ -211,7 +244,7 @@ Panel {
             ncService.markRead(item2.id, !item2.unread)
           }
         } else if (text === "m" || text === "M") {
-          ncService.markAllRead(root.selectedFeedId, root.selectedFolderId)
+          root.requestMarkAllRead()
         } else if (text === "u" || text === "U") {
           root.activeFilter = "unread"
         } else if (text === "a" || text === "A") {
@@ -275,13 +308,26 @@ Panel {
           RowLayout {
             spacing: Style.space(3)
 
-            // Mark all as read button
+            // Bulk actions require an explicit menu selection and confirmation.
             PanelActionButton {
-              visible: ncService.authenticated && !root.currentArticle && ncService.unreadCount > 0
-              iconText: "✓"
-              tooltipText: "Mark all as read"
+              id: moreActions
+              visible: ncService.authenticated && !root.currentArticle && !root.showSettings
+              iconText: "⋯"
+              tooltipText: "More actions"
               fontFamily: root.fontFamily
-              onClicked: ncService.markAllRead(root.selectedFeedId, root.selectedFolderId)
+              focusable: true
+              onClicked: actionsMenu.open()
+
+              Menu {
+                id: actionsMenu
+                y: moreActions.height
+
+                MenuItem {
+                  text: "Mark all as read…"
+                  enabled: ncService.unreadCount > 0
+                  onTriggered: Qt.callLater(root.requestMarkAllRead)
+                }
+              }
             }
 
             // Sync button
@@ -1003,6 +1049,31 @@ Panel {
               }
             }
           }
+        }
+      }
+
+      ConfirmDialog {
+        id: readAllConfirm
+        anchors.fill: parent
+        z: 10
+        message: root.pendingReadMessage
+        confirmText: "Mark read"
+        selectedIndex: 0
+        foreground: root.foreground
+        fontFamily: root.fontFamily
+
+        // Keep every key inside the confirmation; Enter initially cancels.
+        Keys.onPressed: function(event) {
+          if (!readAllConfirm.opened) return
+          if (!event.isAutoRepeat) readAllConfirm.handleKey(event)
+          event.accepted = true
+        }
+        onCanceled: root.dismissReadAllConfirm()
+        onConfirmed: {
+          if (ncService.authenticated) {
+            ncService.markAllRead(root.pendingReadFeedId, root.pendingReadFolderId)
+          }
+          root.dismissReadAllConfirm()
         }
       }
     }

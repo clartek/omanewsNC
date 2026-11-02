@@ -110,8 +110,7 @@ BarWidget {
 
     onPressed: function(buttonCode) {
       if (buttonCode === Qt.RightButton && root.service) root.service.sync()
-      else if (buttonCode === Qt.MiddleButton && root.service) root.service.markAllRead(0, 0)
-      else root.toggle()
+      else if (buttonCode === Qt.LeftButton) root.toggle()
     }
   }
 }

@@ -24,10 +24,11 @@ An Omarchy status bar widget and sliding news reader panel replicating [Nextclou
   - `Escape` or `h`: Return to article list
   - `r`: Toggle read / unread
   - `s`: Toggle star / bookmark
-  - `m`: Mark all as read
+  - `m`: Confirm marking the current feed, folder, or all feeds as read
   - `o`: Open article link in default browser
   - `u` / `a` / `b`: Switch filter between Unread, All, and Starred
   - `p`: Play podcast enclosure via `mpv`
+- **Protected Bulk Read Action**: Open **More actions (⋯) → Mark all as read…**, then confirm the scope. Cancel is selected by default. Filters and search do not restrict the action. Middle-clicking the bar icon has no bulk-read action.
 - **Folders & Search**: Filter by folders (*News*, *Tech*, *Github*, etc.) or search on-the-fly.
 
 ---
