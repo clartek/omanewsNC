@@ -28,7 +28,7 @@ An Omarchy status bar widget and sliding news reader panel replicating [Nextclou
   - `o`: Open article link in default browser
   - `u` / `a` / `b`: Switch filter between Unread, All, and Starred
   - `p`: Play podcast enclosure via `mpv`
-- **Protected Bulk Read Action**: Open **More actions (⋯) → Mark all as read…**, then confirm the scope. Cancel is selected by default. Filters and search do not restrict the action. Middle-clicking the bar icon has no bulk-read action.
+- **Protected Bulk Read Action**: Open **More actions (⋯) → Mark all as read…**, then confirm the scope. Cancel is selected by default. Filters and search do not restrict the action. Middle-clicking the bar icon has no bulk-read action. Unread counts update after the server accepts the request; failures are shown in the panel.
 - **Folders & Search**: Filter by folders (*News*, *Tech*, *Github*, etc.) or search on-the-fly.
 
 ---
@@ -53,10 +53,10 @@ Or move it on the bar:
 omarchy bar move clartek.omanewsnc --section right
 ```
 
-Reload the shell:
+Restart the shell after updating plugin code so cached QML is replaced:
 
 ```bash
-omarchy-shell shell rescanPlugins
+omarchy restart shell
 ```
 
 ## Removal

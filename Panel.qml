@@ -57,7 +57,7 @@ Panel {
   property string pendingReadMessage: ""
 
   function requestMarkAllRead() {
-    if (!root.opened || !ncService.authenticated || ncService.unreadCount <= 0 || root.currentArticle || root.showSettings || readAllConfirm.opened) return
+    if (!root.opened || ncService.markingAllRead || ncService.syncing || !ncService.authenticated || ncService.unreadCount <= 0 || root.currentArticle || root.showSettings || readAllConfirm.opened) return
     pendingReadFeedId = selectedFeedId
     pendingReadFolderId = selectedFolderId
     pendingReadMessage = pendingReadFeedId > 0
@@ -155,6 +155,7 @@ Panel {
 
   Connections {
     target: ncService
+    function onBulkReadFinished() { root.refreshItems(true) }
     function onSyncingChanged() {
       if (!ncService.syncing && !ncService.syncError && ncService.authenticated) {
         root.refreshItems(true)
@@ -324,7 +325,7 @@ Panel {
 
                 MenuItem {
                   text: "Mark all as read…"
-                  enabled: ncService.unreadCount > 0
+                  enabled: ncService.unreadCount > 0 && !ncService.markingAllRead && !ncService.syncing
                   onTriggered: Qt.callLater(root.requestMarkAllRead)
                 }
               }
@@ -336,7 +337,7 @@ Panel {
               iconText: "↻"
               tooltipText: ncService.syncing ? "Syncing feeds…" : "Sync feeds"
               fontFamily: root.fontFamily
-              enabled: !ncService.syncing
+              enabled: !ncService.syncing && !ncService.markingAllRead
               onClicked: ncService.sync()
             }
 
@@ -360,6 +361,17 @@ Panel {
               }
             }
           }
+        }
+
+        Text {
+          Layout.fillWidth: true
+          visible: ncService.markingAllRead || ncService.bulkReadError !== ""
+          textFormat: Text.PlainText
+          text: ncService.markingAllRead ? "Marking articles as read…" : ncService.bulkReadError
+          wrapMode: Text.WordWrap
+          font.family: root.fontFamily
+          font.pixelSize: Style.space(11)
+          color: ncService.bulkReadError !== "" ? root.urgent : root.foreground
         }
 
         // ==========================================

@@ -15,6 +15,10 @@ Item {
   property bool loggingIn: false
   property string loginError: ""
 
+  readonly property bool markingAllRead: bulkReadProcess.running
+  property string bulkReadError: ""
+  signal bulkReadFinished()
+
   property bool syncing: false
   property bool syncError: false
   property string lastError: ""
@@ -60,7 +64,7 @@ Item {
   }
 
   function sync() {
-    if (syncProcess.running || helperPath === "" || !authenticated) return
+    if (syncProcess.running || markingAllRead || helperPath === "" || !authenticated) return
     syncing = true
     syncError = false
     lastError = ""
@@ -127,18 +131,13 @@ Item {
   }
 
   function markAllRead(feedId, folderId) {
-    if (helperPath === "") return
-    for (var i = 0; i < currentItems.length; i++) {
-      currentItems[i].unread = 0
-    }
-    currentItems = currentItems.slice()
-    unreadCount = 0
-
+    if (helperPath === "" || !authenticated || markingAllRead || syncing) return
+    bulkReadError = ""
     var cmd = ["python3", helperPath, "--mark-all-read"]
     if (feedId > 0) cmd.push("--feed-id", String(feedId))
     else if (folderId > 0) cmd.push("--folder-id", String(folderId))
-    Quickshell.execDetached(cmd)
-    delayedRefresh.restart()
+    bulkReadProcess.command = cmd
+    bulkReadProcess.running = true
   }
 
   function applyStatus(data) {
@@ -238,6 +237,27 @@ Item {
       } else {
         root.syncError = true
         root.lastError = String(syncErr.text || syncOut.text || "Sync failed").trim()
+      }
+    }
+  }
+
+  // Bulk read waits for a confirmed server response before updating the UI.
+  Process {
+    id: bulkReadProcess
+    running: false
+    command: []
+    stdout: StdioCollector { id: bulkReadOut; waitForEnd: true }
+    stderr: StdioCollector { id: bulkReadErr; waitForEnd: true }
+    onExited: function(exitCode) {
+      var parsed = Model.parseJson(bulkReadOut.text)
+      if (exitCode === 0 && parsed && parsed.ok) {
+        root.applyStatus(parsed)
+        root.itemsFetchedAt = 0
+        root.bulkReadFinished()
+      } else {
+        root.bulkReadError = parsed && parsed.error
+          ? String(parsed.error)
+          : String(bulkReadErr.text || "Could not mark articles as read. Try again.").trim()
       }
     }
   }

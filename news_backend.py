@@ -924,31 +924,45 @@ def star_item(client, item_id, starred=True):
 
 
 def mark_all_read(client, feed_id=0, folder_id=0):
+  if not client:
+    return False, "Not authenticated. Sign in before marking articles as read."
+
   conn = get_db()
-  with conn:
+  try:
     max_row = conn.execute("SELECT MAX(id) as max_id FROM items").fetchone()
     newest_id = max_row["max_id"] if max_row and max_row["max_id"] else 0
+    if newest_id <= 0:
+      return False, "Sync news before marking articles as read."
 
     if feed_id > 0:
-      conn.execute("UPDATE items SET unread = 0 WHERE feed_id = ?", (feed_id,))
-      conn.execute("UPDATE feeds SET unread_count = 0 WHERE id = ?", (feed_id,))
-      if client and newest_id > 0:
-        client.request(f"/feeds/{feed_id}/read", method="PUT", json_body={"newestItemId": newest_id})
+      endpoint = f"/feeds/{feed_id}/read"
     elif folder_id > 0:
-      conn.execute(
-        "UPDATE items SET unread = 0 WHERE feed_id IN (SELECT id FROM feeds WHERE folder_id = ?)",
-        (folder_id,)
-      )
-      conn.execute("UPDATE feeds SET unread_count = 0 WHERE folder_id = ?", (folder_id,))
-      if client and newest_id > 0:
-        client.request(f"/folders/{folder_id}/read", method="PUT", json_body={"newestItemId": newest_id})
+      endpoint = f"/folders/{folder_id}/read"
     else:
-      conn.execute("UPDATE items SET unread = 0")
-      conn.execute("UPDATE feeds SET unread_count = 0")
-      if client and newest_id > 0:
-        client.request("/all/read", method="PUT", json_body={"newestItemId": newest_id})
+      endpoint = "/items/read"
 
-  return True
+    # Commit locally only after Nextcloud has accepted the same operation.
+    status, data = client.request(endpoint, method="PUT", json_body={"newestItemId": newest_id})
+    if not 200 <= status < 300:
+      message = data.get("message") if isinstance(data, dict) else None
+      return False, f"Could not mark articles as read: {message or ('HTTP ' + str(status))}"
+
+    with conn:
+      if feed_id > 0:
+        conn.execute("UPDATE items SET unread = 0 WHERE feed_id = ? AND id <= ?", (feed_id, newest_id))
+        conn.execute("UPDATE feeds SET unread_count = 0 WHERE id = ?", (feed_id,))
+      elif folder_id > 0:
+        conn.execute(
+          "UPDATE items SET unread = 0 WHERE feed_id IN (SELECT id FROM feeds WHERE folder_id = ?) AND id <= ?",
+          (folder_id, newest_id)
+        )
+        conn.execute("UPDATE feeds SET unread_count = 0 WHERE folder_id = ?", (folder_id,))
+      else:
+        conn.execute("UPDATE items SET unread = 0 WHERE id <= ?", (newest_id,))
+        conn.execute("UPDATE feeds SET unread_count = 0")
+    return True, ""
+  finally:
+    conn.close()
 
 
 def logout():
@@ -1059,8 +1073,11 @@ def main():
     sys.exit(0)
 
   if args.mark_all_read:
-    mark_all_read(client, feed_id=args.feed_id, folder_id=args.folder_id)
-    print(json.dumps({"ok": True, "action": "mark_all_read"}))
+    ok, error = mark_all_read(client, feed_id=args.feed_id, folder_id=args.folder_id)
+    if not ok:
+      print(json.dumps({"ok": False, "error": error}))
+      sys.exit(1)
+    print(json.dumps(query_status(client)))
     sys.exit(0)
 
   if args.sync:
